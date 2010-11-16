@@ -1,3 +1,4 @@
+import time
 import shelve
 
 class IPLeaseManager(object):
@@ -20,12 +21,6 @@ class IPLeaseManager(object):
         ip_str = '.'.join(map(str,ip))
         return self.db.get(ip, None)
 
-    def isIpValidForNetmask(ip, netmask):
-        for d in xrange(4, 0, -1):
-            if ip[d-1] & netmask[d-1] != ip[d-1]:
-                return False
-        return True
-
     def leaseIpAddress(self, ip, requester_hwmac, lease_time):
         ip_str = '.'.join(map(str,ip))
         lease_expiry = time.time() + lease_time
@@ -34,10 +29,9 @@ class IPLeaseManager(object):
                     'lease_expiry': lease_expiry
                 }
 
-    def allocateIpAddress(self, subnet, netmask, requester_hwmac):
+    def allocateIpAddress(self, subnet, requester_hwmac):
         """
         subnet = [192,168,0,0]
-        netmask = [255,255,0,0]
         """
         # This is not going to be the best algorithm of all... ^____^
         # TODO: Add cache per-subnet
@@ -46,12 +40,11 @@ class IPLeaseManager(object):
             ip[2] = d
             for i in xrange(1, 255):
                 ip[3] = i
-                if not self.isIpValidForNetmask(ip, netmask):
-                    continue
                 if self.isIpLeased(ip):
                     continue
-        # We 'temporarly' lease the IP for, assuming the client ACKs it
-        self.leaseIpAddress(ip, requester_hwmac, self.wait_ack_lease_time)
-        return ip
+                # We 'temporarly' lease the IP for, assuming the client ACKs it
+                self.leaseIpAddress(ip, requester_hwmac, self.wait_ack_lease_time)
+                return ip
+        raise Exception("No available leases")
 
 
