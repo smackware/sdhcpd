@@ -53,8 +53,10 @@ class Server(DhcpServer):
             if not backend_entry:
                 continue
             joined_offer_options.update(backend_entry.options)
-        offer_packet = packet.TransformToDhcpOfferPacket()
+        offer_packet = DhcpPacket()
+        offer_packet.SetMultipleOptions(packet.GetMultipleOptions())
         offer_packet.SetMultipleOptions(joined_offer_options)
+        offer_packet.TransformToDhcpOfferPacket()
         netmask = offer_packet.GetOption('subnet_mask')
         network_prefix = [10,0,0,0]
         if not sum(offer_packet.GetOption('yiaddr')) and network_prefix:
