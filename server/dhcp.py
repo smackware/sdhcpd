@@ -1,6 +1,8 @@
 import time
 import shelve
 
+from pydhcplib.type_ipv4 import ipv4
+
 class IPLeaseManager(object):
     db = None
     lease_db_filepath = None
@@ -29,22 +31,22 @@ class IPLeaseManager(object):
                     'lease_expiry': lease_expiry
                 }
 
-    def allocateIpAddress(self, subnet, requester_hwmac):
+    def allocateIpAddress(self, network_prefix, netmask, requester_hwmac):
         """
-        subnet = [192,168,0,0]
+        network_prefix = [192,168,0,0]
+        netmask = [255,255,0,0]
         """
-        # This is not going to be the best algorithm of all... ^____^
-        # TODO: Add cache per-subnet
-        ip = list(subnet)
-        for d in xrange(subnet[2], 255):
-            ip[2] = d
-            for i in xrange(1, 255):
-                ip[3] = i
-                if self.isIpLeased(ip):
-                    continue
-                # We 'temporarly' lease the IP for, assuming the client ACKs it
-                self.leaseIpAddress(ip, requester_hwmac, self.wait_ack_lease_time)
-                return ip
+
+        ipv4_network_prefix = ipv4(network_prefix)
+        ipv4_host_part_max = ipv4(map(lambda i: 255 ^ netmask[i], range(0,4)))
+        print ipv4_host_part_max
+        for i in xrange(1, ipv4_host_part_max.int()):
+            ip = ipv4(ipv4_network_prefix.int() + i).list()
+            if self.isIpLeased(ip):
+                continue
+            # We 'temporarly' lease the IP for, assuming the client ACKs it
+            self.leaseIpAddress(ip, requester_hwmac, self.wait_ack_lease_time)
+            return ip
         raise Exception("No available leases")
 
 

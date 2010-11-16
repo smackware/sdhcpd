@@ -61,7 +61,7 @@ class Server(DhcpServer):
         network_prefix = [10,0,0,0]
         if not sum(offer_packet.GetOption('yiaddr')) and network_prefix:
             print "Allocating IP"
-            allocated_ip = self.ip_lease_manager.allocateIpAddress(network_prefix, macaddr)
+            allocated_ip = self.ip_lease_manager.allocateIpAddress(network_prefix, netmask, macaddr)
             offer_packet.SetOption('yiaddr', allocated_ip)
         print "Sending offer:"
         print offer_packet.str()
@@ -86,7 +86,7 @@ class Server(DhcpServer):
 
 ldap_backend = LDAPBackend(parse_backend_options("ldap_backend.conf"))
 test_backend = DummyBackend()
-server = Server(netopt, [ldap_backend])
+server = Server(netopt, [ldap_backend,test_backend])
 
 while True :
     server.GetNextDhcpPacket()
