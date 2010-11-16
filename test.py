@@ -12,6 +12,10 @@ netopt = {'client_listen_port':"68",
           'server_listen_port':"67",
           'listen_address':"0.0.0.0"}
 
+p = DhcpPacket()
+p.SetOption('chaddr', [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])
+p.SetOption('hlen', [6])
+
 ############# HELPERS
 def parse_backend_options(options_filepath):
     options = dict()
