@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-BackendEntry = namedtuple("BackendEntry", "options subnet netmask")
+BackendEntry = namedtuple("BackendEntry", "options")
 
 class BackendError(Exception):
     pass

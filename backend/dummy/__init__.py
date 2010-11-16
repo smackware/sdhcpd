@@ -7,5 +7,5 @@ class DummyBackend(AbstractBackend):
                 'yiaddr': parse_ip_or_str("10.0.0.20"),
                 }
         print options
-        return BackendEntry(options, [10,0,0,0], [255,255,255,0])
+        return BackendEntry(options)
 

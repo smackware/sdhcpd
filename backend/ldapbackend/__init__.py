@@ -65,7 +65,7 @@ class LDAPBackend(AbstractBackend):
             value = list()
             map(value.extend, parse_ip_or_str(results[0].get(attr_name, [])))
             offer_options[dhcp_attr_name] = value
-        return BackendEntry(offer_options, None, None)
+        return BackendEntry(offer_options)
 
     def close(self):
         self.ldap_conn.close()

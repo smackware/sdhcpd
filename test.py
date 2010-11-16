@@ -47,33 +47,31 @@ class Server(DhcpServer):
     def HandleDhcpDiscover(self, packet):
         print "Got discover!"
         joined_offer_options = dict()
-        subnet = None
-        netmask = None
         macaddr = packet.GetHardwareAddress()
         for backend in self.backends:
             backend_entry = backend.query_entry(packet)
             if not backend_entry:
                 continue
             joined_offer_options.update(backend_entry.options)
-            subnet = backend_entry.subnet or subnet
-            netmask = backend_entry.netmask or netmask
-        offer_packet = DhcpPacket()
+        offer_packet = packet.TransformToDhcpOfferPacket()
         offer_packet.SetMultipleOptions(joined_offer_options)
-        if not sum(offer_packet.GetOption('yiaddr')) and subnet:
+        netmask = offer_packet.GetOption('subnet_mask')
+        network_prefix = [10,0,0,0]
+        if not sum(offer_packet.GetOption('yiaddr')) and network_prefix:
             print "Allocating IP"
-            allocated_ip = self.ip_lease_manager.allocateIpAddress(subnet, macaddr)
+            allocated_ip = self.ip_lease_manager.allocateIpAddress(network_prefix, macaddr)
             offer_packet.SetOption('yiaddr', allocated_ip)
         print "Sending offer:"
-        offer_packet.TransformToDhcpOfferPacket()
         print offer_packet.str()
         self.SendDhcpPacketTo(offer_packet, "255.255.255.255", 68)
 
     def HandleDhcpRequest(self, packet):
         print "Got request:"
         print packet.str()
+        self.ip_lease_manager.leaseIpAddress(packet.GetOption('yiaddr'))
+        offer_packet = packet.TransformToAckDhcpPacket()
         print "Sending ACK:"
-        packet.TransformToDhcpAckPacket()
-        self.SendDhcpPacketTo(packet, "255.255.255.255", 68)
+        self.SendDhcpPacketTo(offer_packet, "255.255.255.255", 68)
 
     def HandleDhcpDecline(self, packet):
         print packet.str()        
@@ -86,7 +84,7 @@ class Server(DhcpServer):
 
 ldap_backend = LDAPBackend(parse_backend_options("ldap_backend.conf"))
 test_backend = DummyBackend()
-server = Server(netopt, [ldap_backend,test_backend])
+server = Server(netopt, [ldap_backend])
 
 while True :
     server.GetNextDhcpPacket()
