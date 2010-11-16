@@ -1,4 +1,6 @@
-def IPLeaseManager(object):
+import shelve
+
+class IPLeaseManager(object):
     db = None
     lease_db_filepath = None
     wait_ack_lease_time = 10
