@@ -49,6 +49,7 @@ class Server(DhcpServer):
         joined_offer_options = dict()
         subnet = None
         netmask = None
+        macaddr = packet.GetHardwareAddress()
         for backend in self.backends:
             backend_entry = backend.query_entry(packet)
             if not backend_entry:
@@ -58,9 +59,13 @@ class Server(DhcpServer):
             netmask = backend_entry.netmask or netmask
         offer_packet = DhcpPacket()
         offer_packet.SetMultipleOptions(joined_offer_options)
-        offer_packet.TransformToDhcpOfferPacket()
+        if not sum(offer_packet.GetOption('yiaddr')) and subnet:
+            print "Allocating IP"
+            allocated_ip = self.ip_lease_manager.allocateIpAddress(subnet, macaddr)
+            offer_packet.SetOption('yiaddr', allocated_ip)
         print "Sending offer:"
-        print offer_packet.str()        
+        offer_packet.TransformToDhcpOfferPacket()
+        print offer_packet.str()
         self.SendDhcpPacketTo(offer_packet, "255.255.255.255", 68)
 
     def HandleDhcpRequest(self, packet):
