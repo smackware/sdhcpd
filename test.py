@@ -3,6 +3,7 @@ import time
 from subprocess import Popen, PIPE, STDOUT
 from pydhcplib.dhcp_packet import *
 from pydhcplib.dhcp_network import *
+from IPy import IP
 
 from backend.ldapbackend import LDAPBackend
 from backend.dummy import DummyBackend
@@ -46,6 +47,22 @@ class Server(DhcpServer):
         self.backends = backends
         self.ip_lease_manager = IPLeaseManager("lease.db")
 
+    def _get_ipv4_network(self, offer_options=dict()):
+        """Returns an IPy.IP"""
+        network = offer_options.pop("network", None)
+        subnet_mask = offer_options.get("subnet_mask", None)
+        network_prefix = offer_options.pop("network_prefix", None)
+        if network and (subnet_mask or network_prefix):
+            raise Exception("Cannot specify both network AND subnet_mask + network_prefix for an entry.")
+        ip_network = None
+        if network:
+            ip_network = IP(network)
+        elif subnet_mask and network_prefix:
+            ip_network = IP('.'.join(map(str, network_prefix))).make_net('.'.join(map(str, subnet_mask)))
+        else:
+            raise Exception("Cannot determine network info for client. Missing prefix or subnet information")
+        return ip_network
+
     def HandleDhcpDiscover(self, packet):
         print "Got discover!"
         joined_offer_options = dict()
@@ -56,22 +73,27 @@ class Server(DhcpServer):
             if not backend_entry:
                 continue
             joined_offer_options.update(backend_entry.options)
+        ipv4_network = self._get_ipv4_network(joined_offer_options)
         offer_packet = DhcpPacket()
         offer_packet.SetMultipleOptions(packet.GetMultipleOptions())
         offer_packet.SetMultipleOptions(joined_offer_options)
         offer_packet.TransformToDhcpOfferPacket()
-        netmask = offer_packet.GetOption('subnet_mask')
-        network_prefix = [10,0,0,0]
-        if self.allow_requested_ips and sum(requested_ip):
-            # TODO: Need to add check that 'requested_id' is in the network of this client
-            current_lease = self.ip_lease_manager.getLeaseInfo(requested_ip)
-            if current_lease and current_lease['hwmac'] != macaddr:
-                raise Exception("Someone else is leasing that ip already")
-            offer_packet.SetOption('yiaddr', parse_ip_or_str(requested_ip))
-        elif not sum(offer_packet.GetOption('yiaddr')) and network_prefix:
-            print "Allocating dynamic IP"
-            allocated_ip = self.ip_lease_manager.allocateIpAddress(network_prefix, netmask, macaddr)
-            offer_packet.SetOption('yiaddr', allocated_ip)
+        if not sum(offer_packet.GetOption('yiaddr')):
+            if self.allow_requested_ips and sum(requested_ip):
+                print "Client requested IP: " + str(requested_ip)
+                if '.'.join(requested_ip) in ipv4_network: # Check that requested_ip is in the ipv4_network
+                    current_lease = self.ip_lease_manager.getLeaseInfo(requested_ip)
+                    if current_lease and current_lease['hwmac'] != macaddr:
+                        raise Exception("Someone else is leasing that ip already")
+                    offer_packet.SetOption('yiaddr', parse_ip_or_str(requested_ip))
+                else:
+                    print "ERROR Requested ip is not in the client's network. Not setting"
+        if not sum(offer_packet.GetOption('yiaddr')):
+                print "Allocating dynamic IP"
+                network_prefix = map(int,str(ipv4_network.net()).split('.'))
+                subnet_mask = map(int,str(ipv4_network.netmask()).split('.'))
+                allocated_ip = self.ip_lease_manager.allocateIpAddress(network_prefix, subnet_mask, macaddr)
+                offer_packet.SetOption('yiaddr', allocated_ip)
         print "Sending offer:"
         print offer_packet.str()
         self.SendDhcpPacketTo(offer_packet, "255.255.255.255", 68)
