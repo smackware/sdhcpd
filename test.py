@@ -101,8 +101,9 @@ class Server(DhcpServer):
     def HandleDhcpRequest(self, packet):
         print "Got request:"
         print packet.str()
-        self.ip_lease_manager.leaseIpAddress(packet.GetOption('yiaddr'))
-        offer_packet = packet.TransformToAckDhcpPacket()
+        macaddr = packet.GetHardwareAddress()
+        self.ip_lease_manager.leaseIpAddress(packet.GetOption('yiaddr'), macaddr, 100)
+        packet.TransformToDhcpAckPacket()
         print "Sending ACK:"
         self.SendDhcpPacketTo(offer_packet, "255.255.255.255", 68)
 
