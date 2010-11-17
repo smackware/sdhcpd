@@ -1,79 +1,87 @@
 import time
 import shelve
+from collections import namedtuple
 
-from IPy import IP
 from pydhcplib.type_ipv4 import ipv4
+
+from server.types import IP, MAC
+
+IPLease = namedtuple('IPLease', "ip mac expiry")
+
+class LeaseError(Exception):
+    pass
 
 class IPLeaseManager(object):
     db = None
     lease_db_filepath = None
-    wait_ack_lease_time = 200
+    wait_ack_lease_time = 60
 
     def __init__(self, lease_db_filepath):
         self.lease_db_filepath = lease_db_filepath
         self.db = shelve.open(lease_db_filepath)
 
-    def isIpLeased(self, ip):
-        ip_str = '.'.join(map(str,ip))
-        return self._leaseValid(ip_str)
-
-    def _leaseValid(self, lease_key):
-        if self.db.has_key(lease_key):
-            print "LEASE EXISTS: " + lease_key
+    def _is_valid_lease(self, lease_key):
         if self.db.has_key(lease_key) and \
-            self.db[lease_key]['lease_expiry'] > time.time():
+            self.db[lease_key].expiry > time.time():
                 return True
         return False
 
-    def getLeaseInfo(self, ip):
-        ip_str = '.'.join(map(str,ip))
-        print "IP: " + ip_str
-        if self._leaseValid(ip_str):
-            return self.db[ip_str]
+    def get_lease(self, ip=None, mac=None):
+        if ip and mac:
+            raise ValueError("Cannot specify both ip and mac")
+        lease_key = str(ip or mac)
+        if self._is_valid_lease(lease_key):
+            return self.db[lease_key]
         return None
 
-    def getLeaseInfoByMac(self, hwmac):
-        hwmac_str = ':'.join(map(lambda i: "%02x" % i, hwmac))
-        if self._leaseValid(hwmac_str):
-            return self.db[hwmac_str]
-        return None
+    def is_leased_to(self, ip, mac):
+        lease = self.get_lease(ip=ip)
+        return bool(lease and MAC(lease.mac) == mac)
 
-    def leaseIpAddress(self, ip, requester_hwmac, lease_time):
-        ip_str = '.'.join(map(str,ip))
-        hwmac_str = ':'.join(map(lambda i: "%02x" % i, requester_hwmac))
-        lease_expiry = time.time() + lease_time
-        self.db[ip_str] = {
-                    'hwmac': hwmac_str,
-                    'lease_expiry': lease_expiry
-                }
-        self.db[hwmac_str] = {
-                    'ip': ip,
-                    'lease_expiry': lease_expiry
-                }
+    def delete_lease(self, ip=None, mac=None):
+        if ip and mac:
+            raise ValueError("Cannot specify both ip and mac")
+        lease_key = str(ip or mac)
+        if self._is_valid_lease(lease_key):
+            ip_key = self.db[lease_key].ip
+            mac_key = self.db[lease_key].mac
+            del self.db[ip_key]
+            del self.db[mac_key]
 
-    def _find_available_ip(self, ipv4_network, requester_hwmac):
-        current_lease = self.getLeaseInfoByMac(requester_hwmac)
-        if current_lease and IP(ipv4(current_lease['ip']).str()) in ipv4_network:
-            print "IP is already leased to this host."
-            ip = current_lease['ip']
-            return ip
-        print "Trying to allocate new ip."
+    def lease_ip_address(self, ip, mac, lease_time):
+        if self.get_lease(ip=ip) and not self.is_leased_to(ip, mac):
+            raise LeaseError("IP %s is already leased, but not to %s" % (str(ip), str(mac), ))
+        lease_expiry = int(time.time() + lease_time)
+        ip_lease = IPLease(str(ip), str(mac), lease_expiry)
+        self.db[str(ip)] = ip_lease
+        self.db[str(mac)] = ip_lease
+
+    def _find_available_ip(self, ipv4_network, mac):
+        existing_lease = self.get_lease(mac=mac)
+        if existing_lease and IP(existing_lease.ip) in ipv4_network:
+            print "Giving valid IP %s already leased to %s" % (str(ip), str(mac))
+            return IP(existing_lease.ip)
+        elif existing_lease:
+                print "The ip already leased for this host is not in the specified network."
         for ip in ipv4_network:
-            if self.isIpLeased(ip):
+            if self.get_lease(ip=ip):
                 continue
-            if ip == ipv4_network.net():
+            ip = IP(ip.int())
+            if ip.list()[3] == 0: # Do not allocate IPs with .0 ends
                 continue
-            return ipv4(str(ip)).list()
+            return ip
+        raise LeaseError("No available leases")
         
-
-    def allocateIpAddress(self, ipv4_network, requester_hwmac):
+    def allocate_ip_address(self, ipv4_network, mac, requested_ip=None):
         """
         ipv4_network = IPy.IP
         """
-        ip = self._find_available_ip(ipv4_network, requester_hwmac)
-        if not ip:
-            raise Exception("No available leases")
-        self.leaseIpAddress(ip, requester_hwmac, self.wait_ack_lease_time)
+        if requested_ip:
+            self.lease_ip_address(requested_ip, mac, self.wait_ack_lease_time)
+            ip = requested_ip
+        else:
+            ip = self._find_available_ip(ipv4_network, mac)
+            self.lease_ip_address(ip, mac, self.wait_ack_lease_time)
         return ip
 
 
