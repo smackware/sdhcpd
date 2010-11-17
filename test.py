@@ -63,21 +63,9 @@ class Server(DhcpServer):
             raise Exception("Cannot determine network info for client. Missing prefix or subnet information")
         return ip_network
 
-    def HandleDhcpDiscover(self, packet):
-        print "Got discover!"
-        joined_offer_options = dict()
-        requested_ip = packet.GetOption('requested_ip_address')
-        macaddr = packet.GetHardwareAddress()
-        for backend in self.backends:
-            backend_entry = backend.query_entry(packet)
-            if not backend_entry:
-                continue
-            joined_offer_options.update(backend_entry.options)
-        ipv4_network = self._get_ipv4_network(joined_offer_options)
-        offer_packet = DhcpPacket()
-        offer_packet.SetMultipleOptions(packet.GetMultipleOptions())
-        offer_packet.SetMultipleOptions(joined_offer_options)
-        offer_packet.TransformToDhcpOfferPacket()
+
+    def _assign_ipv4_address(self, offer_packet, ipv4_network, requested_ip):
+        macaddr = offer_packet.GetHardwareAddress()
         if not sum(offer_packet.GetOption('yiaddr')):
             if self.allow_requested_ips and sum(requested_ip):
                 print "Client requested IP: " + str(requested_ip)
@@ -89,11 +77,27 @@ class Server(DhcpServer):
                 else:
                     print "ERROR Requested ip is not in the client's network. Not setting"
         if not sum(offer_packet.GetOption('yiaddr')):
-                print "Allocating dynamic IP"
-                network_prefix = map(int,str(ipv4_network.net()).split('.'))
-                subnet_mask = map(int,str(ipv4_network.netmask()).split('.'))
-                allocated_ip = self.ip_lease_manager.allocateIpAddress(network_prefix, subnet_mask, macaddr)
-                offer_packet.SetOption('yiaddr', allocated_ip)
+            print "Allocating dynamic IP"
+            allocated_ip = self.ip_lease_manager.allocateIpAddress(ipv4_network, macaddr)
+            print allocated_ip
+            print type(allocated_ip)
+            offer_packet.SetOption('yiaddr', ipv4(allocated_ip).list())
+
+
+    def HandleDhcpDiscover(self, packet):
+        print "Got discover!"
+        joined_offer_options = dict()
+        requested_ip = packet.GetOption('requested_ip_address')
+        for backend in self.backends:
+            backend_entry = backend.query_entry(packet)
+            if not backend_entry:
+                continue
+            joined_offer_options.update(backend_entry.options)
+        ipv4_network = self._get_ipv4_network(joined_offer_options)
+        offer_packet = packet
+        offer_packet.SetMultipleOptions(joined_offer_options)
+        self._assign_ipv4_address(offer_packet, ipv4_network, requested_ip)
+        offer_packet.TransformToDhcpOfferPacket()
         print "Sending offer:"
         print offer_packet.str()
         self.SendDhcpPacketTo(offer_packet, "255.255.255.255", 68)
@@ -102,10 +106,26 @@ class Server(DhcpServer):
         print "Got request:"
         print packet.str()
         macaddr = packet.GetHardwareAddress()
-        self.ip_lease_manager.leaseIpAddress(packet.GetOption('yiaddr'), macaddr, 100)
+        requested_ip = packet.GetOption('request_ip_address') or packet.GetOption('yiaddr')
+        current_lease = self.ip_lease_manager.getLeaseInfo(requested_ip)
+        print "WANTED IP: " + str(requested_ip)
+        print current_lease
+        macaddr_str = ':'.join(map(lambda i: "%02x" % i, macaddr))
+        if not current_lease or current_lease['hwmac'] != macaddr_str:
+            print "Client sent a request for ip, but ip is not leased to him"
+            return
+        self.ip_lease_manager.leaseIpAddress(requested_ip, macaddr, 10000)
+        packet.SetOption('ip_address_lease_time', [0,0,255,255])
+        packet.SetOption('yiaddr', requested_ip)
         packet.TransformToDhcpAckPacket()
+        dest_relay_or_gateway = None
+        if sum(packet.GetOption('giaddr')):
+            dest_relay_or_gateway = '.'.join(map(str,packet.GetOption('giaddr')))
+        else:
+            dest_relay_or_gateway = "255.255.255.255"
         print "Sending ACK:"
-        self.SendDhcpPacketTo(offer_packet, "255.255.255.255", 68)
+        print packet.str()
+        self.SendDhcpPacketTo(packet, dest_relay_or_gateway, 68)
 
     def HandleDhcpDecline(self, packet):
         print packet.str()        
