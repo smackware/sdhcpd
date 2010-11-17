@@ -37,6 +37,8 @@ def parse_backend_options(options_filepath):
 
 
 class Server(DhcpServer):
+    allow_requested_ips = True
+
     def __init__(self, dhcp_server_options, backends):
         DhcpServer.__init__(self,dhcp_server_options["listen_address"],
                             dhcp_server_options["client_listen_port"],
@@ -47,6 +49,7 @@ class Server(DhcpServer):
     def HandleDhcpDiscover(self, packet):
         print "Got discover!"
         joined_offer_options = dict()
+        requested_ip = packet.GetOption('requested_ip_address')
         macaddr = packet.GetHardwareAddress()
         for backend in self.backends:
             backend_entry = backend.query_entry(packet)
@@ -59,8 +62,14 @@ class Server(DhcpServer):
         offer_packet.TransformToDhcpOfferPacket()
         netmask = offer_packet.GetOption('subnet_mask')
         network_prefix = [10,0,0,0]
-        if not sum(offer_packet.GetOption('yiaddr')) and network_prefix:
-            print "Allocating IP"
+        if self.allow_requested_ips and sum(requested_ip):
+            # TODO: Need to add check that 'requested_id' is in the network of this client
+            current_lease = self.ip_lease_manager.getLeaseInfo(requested_ip)
+            if current_lease and current_lease['hwmac'] != macaddr:
+                raise Exception("Someone else is leasing that ip already")
+            offer_packet.SetOption('yiaddr', parse_ip_or_str(requested_ip))
+        elif not sum(offer_packet.GetOption('yiaddr')) and network_prefix:
+            print "Allocating dynamic IP"
             allocated_ip = self.ip_lease_manager.allocateIpAddress(network_prefix, netmask, macaddr)
             offer_packet.SetOption('yiaddr', allocated_ip)
         print "Sending offer:"
