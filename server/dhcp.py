@@ -21,7 +21,9 @@ class IPLeaseManager(object):
 
     def getLeaseInfo(self, ip):
         ip_str = '.'.join(map(str,ip))
-        return self.db.get(ip, None)
+        if self.isIpLeased(ip):
+            return self.db[ip]
+        return None
 
     def leaseIpAddress(self, ip, requester_hwmac, lease_time):
         ip_str = '.'.join(map(str,ip))
