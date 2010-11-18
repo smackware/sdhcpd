@@ -47,7 +47,7 @@ class DirectoryBackend(AbstractBackend):
         print "Querying " + mac_str
         host_name = self.host_by_mac.get(mac_str, None)
         if host_name:
-            host_data = self.hosts[host_name]
+            host_data = dict(self.hosts[host_name])
         else:
             host_data = {'groups': 'default'} # Undefined MACs go to group 'default'
         host_group_names = shlex.split(host_data.pop("groups", ""))
