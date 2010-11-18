@@ -129,12 +129,31 @@ class Server(DhcpServer):
         self.SendDhcpPacketTo(packet, dest_relay_or_gateway, 68)
 
     def HandleDhcpDecline(self, packet):
-        print packet.str()        
+        self.ip_lease_manager.delete_lease(mac=MAC(packet.GetNetworkAddress()))
 
     def HandleDhcpRelease(self, packet):
-        print packet.str()        
+        self.ip_lease_manager.delete_lease(mac=MAC(packet.GetNetworkAddress()))
 
     def HandleDhcpInform(self, packet):
+        print "GOT: INFORM"
+        mac = MAC(packet.GetHardwareAddress())
+        entry_options = self._calculate_entry_options(packet)
+        ipv4_network = self._get_ipv4_network(entry_options)
+        self._set_packet_options(packet, entry_options)
+        client_lease = self.ip_lease_manager.get_lease(mac=mac)
+        if not client_lease:
+            # Maybe send DHCP Deny?
+            return None
+        packet.SetOption('yiaddr', IP(client_lease.ip).list())
+        packet.TransformToDhcpAckPacket()
+        dest_relay_or_gateway = None
+        if sum(packet.GetOption('giaddr')):
+            dest_relay_or_gateway = str(IP.from_list(packet.GetOption('giaddr')))
+        else:
+            dest_relay_or_gateway = "255.255.255.255"
+        print "SEND: ACK"
+        print packet.str()
+        self.SendDhcpPacketTo(packet, dest_relay_or_gateway, 68)
         print packet.str()
 
 ldap_backend = LDAPBackend(parse_backend_options("ldap_backend.conf"))
