@@ -5,8 +5,10 @@ from pydhcplib.dhcp_packet import *
 from pydhcplib.dhcp_network import *
 from server.types import IP, MAC, word
 
+from helper.dhcp import parse_ip_or_str
 from backend.ldapbackend import LDAPBackend
 from backend.dummy import DummyBackend
+from backend.filebackend.directory import DirectoryBackend
 from server.dhcp import IPLeaseManager, LeaseError
 
 netopt = {'client_listen_port':"68",
@@ -69,13 +71,19 @@ class Server(DhcpServer):
             joined_offer_options.update(backend_entry.options)
         return joined_offer_options
 
+    def _set_packet_options(self, packet, options):
+        for k, v in options.iteritems():
+            if isinstance(v, str):
+                v = parse_ip_or_str(v)
+            packet.SetOption(k, v)
+
     def HandleDhcpDiscover(self, packet):
         print "GOT: DISCOVER"
         mac = MAC(packet.GetHardwareAddress())
         requested_ip = packet.GetOption('requested_ip_address')
         entry_options = self._calculate_entry_options(packet)
         ipv4_network = self._get_ipv4_network(entry_options)
-        packet.SetMultipleOptions(entry_options)
+        self._set_packet_options(packet, entry_options)
         try:
             if not sum(packet.GetOption('yiaddr')):
                 requested_ip_data = packet.GetOption('requested_ip_address')
@@ -86,7 +94,7 @@ class Server(DhcpServer):
                             )
                 else:
                     ip = self.ip_lease_manager.allocate_ip_address(ipv4_network, mac)
-            packet.SetOption('yiaddr', ip.list())
+                packet.SetOption('yiaddr', ip.list())
         except LeaseError as e:
             print str(e)
             return
@@ -131,8 +139,9 @@ class Server(DhcpServer):
         print packet.str()
 
 ldap_backend = LDAPBackend(parse_backend_options("ldap_backend.conf"))
+dir_backend = DirectoryBackend({'data_dir': './data_dir'})
 test_backend = DummyBackend()
-server = Server(netopt, [ldap_backend,test_backend])
+server = Server(netopt, [ldap_backend, dir_backend])
 
 while True :
     server.GetNextDhcpPacket()
