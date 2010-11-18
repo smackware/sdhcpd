@@ -114,7 +114,7 @@ class Server(DhcpServer):
             client_old_lease = self.ip_lease_manager.get_lease(mac=mac)
             if client_old_lease:
                 self.ip_lease_manager.delete_lease(mac)
-                print "Released lesae of %s from %s" % (client_old_lease.ip, str(mac))
+                print "Released lease of %s from %s" % (client_old_lease.ip, str(mac))
             return
         packet.SetOption('ip_address_lease_time', lease_time.bytes())
         packet.SetOption('yiaddr', ip.list())
