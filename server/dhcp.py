@@ -51,6 +51,7 @@ class IPLeaseManager(object):
     def lease_ip_address(self, ip, mac, lease_time):
         if self.get_lease(ip=ip) and not self.is_leased_to(ip, mac):
             raise LeaseError("IP %s is already leased, but not to %s" % (str(ip), str(mac), ))
+        self.delete_lease(mac=mac) # Remove any previous lease of this mac addr
         lease_expiry = int(time.time() + lease_time)
         ip_lease = IPLease(str(ip), str(mac), lease_expiry)
         self.db[str(ip)] = ip_lease
@@ -59,7 +60,7 @@ class IPLeaseManager(object):
     def _find_available_ip(self, ipv4_network, mac):
         existing_lease = self.get_lease(mac=mac)
         if existing_lease and IP(existing_lease.ip) in ipv4_network:
-            print "Giving valid IP %s already leased to %s" % (str(ip), str(mac))
+            print "Giving valid IP %s already leased to %s" % (existing_lease.ip, str(mac))
             return IP(existing_lease.ip)
         elif existing_lease:
                 print "The ip already leased for this host is not in the specified network."
