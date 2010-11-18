@@ -1,16 +1,20 @@
 from IPy import IP as _IP
 
-def intToIpv4List(i):
+def word_to_byte_list(i):
     ip_list = [0,0,0,0]
     for l in xrange(4):
         ip_list[3-l] = int(i & 255)
         i = i >> 8
     return ip_list
 
+class word(long):
+    def bytes(self):
+        return word_to_byte_list(self)
+
 class IP(_IP):
     def list(self):
         if self.version() == 4:
-            return intToIpv4List(self.int())
+            return word_to_byte_list(self.int())
         raise NotImplementedError("Don't know how to convert non-ipv4 to list")
 
     @classmethod
