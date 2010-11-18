@@ -61,4 +61,4 @@ class DirectoryBackend(AbstractBackend):
             host_data = joined_data
         if not len(host_data):
             return None
-        return host_data
+        return BackendEntry(options=host_data)
