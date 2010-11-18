@@ -3,7 +3,7 @@ import time
 from subprocess import Popen, PIPE, STDOUT
 from pydhcplib.dhcp_packet import *
 from pydhcplib.dhcp_network import *
-from server.types import IP, MAC
+from server.types import IP, MAC, word
 
 from backend.ldapbackend import LDAPBackend
 from backend.dummy import DummyBackend
@@ -99,12 +99,17 @@ class Server(DhcpServer):
         print "GOT: REQUEST"
         mac = MAC(packet.GetHardwareAddress())
         ip = IP.from_list(packet.GetOption('request_ip_address') or packet.GetOption('yiaddr'))
+        lease_time = word(1000)
         if self.ip_lease_manager.is_leased_to(ip, mac):
-            self.ip_lease_manager.lease_ip_address(ip, mac, 10000)
+            self.ip_lease_manager.lease_ip_address(ip, mac, lease_time)
         else:
             print "Client %s requested IP %s not leased to it." % (str(mac), str(ip),)
+            client_old_lease = self.ip_lease_manager.get_lease(mac=mac)
+            if client_old_lease:
+                self.ip_lease_manager.delete_lease(mac)
+                print "Released lesae of %s from %s" % (client_old_lease.ip, str(mac))
             return
-        packet.SetOption('ip_address_lease_time', [0,0,255,255])
+        packet.SetOption('ip_address_lease_time', lease_time.bytes())
         packet.SetOption('yiaddr', ip.list())
         packet.TransformToDhcpAckPacket()
         dest_relay_or_gateway = None
