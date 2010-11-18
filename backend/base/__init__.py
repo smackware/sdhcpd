@@ -17,9 +17,9 @@ class SimpleReadOnlyConfig(dict):
                 continue
             option_name, option_value = map(lambda x: x.strip(), line.split(":", 1))
             if self.has_key(option_name):
-                self[option_name] += " " + option_value
+                dict.__setitem__(self, option_name, self[option_name] + " " + option_value)
             else:
-                self[option_name] = option_value
+                dict.__setitem__(self, option_name, option_value)
         file_handle.close()
 
 def parse_backend_options(options_filepath):
