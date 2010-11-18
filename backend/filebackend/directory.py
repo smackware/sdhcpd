@@ -30,9 +30,10 @@ class DirectoryBackend(AbstractBackend):
             if file_ext == '.host':
                 print "Loading host: " + name
                 host = SimpleReadOnlyConfig(full_path)
-                if host.has_key("chaddr"):
-                    self.hosts[name] = SimpleReadOnlyConfig(full_path)
-                    self.host_by_mac[host['chaddr']] = name
+                mac_addr = host.pop('chaddr')
+                if mac_addr:
+                    self.hosts[name] = host
+                    self.host_by_mac[mac_addr] = name
                 else:
                     print "Host has no mac addr specified: " + name
             elif file_ext == '.group':
