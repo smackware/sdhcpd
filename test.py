@@ -85,16 +85,15 @@ class Server(DhcpServer):
         ipv4_network = self._get_ipv4_network(entry_options)
         self._set_packet_options(packet, entry_options)
         try:
-            if not sum(packet.GetOption('yiaddr')):
-                requested_ip_data = packet.GetOption('requested_ip_address')
-                if sum(requested_ip_data):
-                    ip = self.ip_lease_manager.allocate_ip_address( \
-                            ipv4_network, mac, \
-                            requested_ip=IP.from_list(requested_ip_data) \
-                            )
-                else:
-                    ip = self.ip_lease_manager.allocate_ip_address(ipv4_network, mac)
-                packet.SetOption('yiaddr', ip.list())
+            requested_ip_data = packet.GetOption('requested_ip_address')
+            if sum(requested_ip_data):
+                ip = self.ip_lease_manager.allocate_ip_address( \
+                        ipv4_network, mac, \
+                        requested_ip=IP.from_list(requested_ip_data) \
+                        )
+            else:
+                ip = self.ip_lease_manager.allocate_ip_address(ipv4_network, mac)
+            packet.SetOption('yiaddr', ip.list())
         except LeaseError as e:
             print str(e)
             return
