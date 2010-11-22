@@ -9,7 +9,7 @@ from helper.dhcp import parse_ip_or_str
 from backend.ldapbackend import LDAPBackend
 from backend.dummy import DummyBackend
 from backend.filebackend.directory import DirectoryBackend
-from server.dhcp import IPLeaseManager, LeaseError
+from server.ipv4 import IPLeaseManager, LeaseError
 
 netopt = {'client_listen_port':"68",
           'server_listen_port':"67",
