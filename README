@@ -1,0 +1,12 @@
+Dependent modules:
+IPy
+pydhcplib
+
+
+For the LDAP backend:
+python-ldap
+
+
+Available backends:
+Flat directory
+LDAP
