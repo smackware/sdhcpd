@@ -2,8 +2,6 @@ import time
 import shelve
 from collections import namedtuple
 
-from pydhcplib.type_ipv4 import ipv4
-
 from server.types import IP, MAC
 
 IPLease = namedtuple('IPLease', "ip mac expiry")
