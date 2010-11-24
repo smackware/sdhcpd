@@ -39,7 +39,7 @@ def parse_backend_options(options_filepath):
 ldap_backend = LDAPBackend(parse_backend_options("ldap_backend.conf"))
 dir_backend = DirectoryBackend({'data_dir': './data_dir'})
 test_backend = DummyBackend()
-dhcp_server = DhcpServer(netopt, [ldap_backend, dir_backend])
+dhcp_server = DhcpServer("eth0", [ldap_backend, dir_backend])
 
 while True :
     dhcp_server.GetNextDhcpPacket()

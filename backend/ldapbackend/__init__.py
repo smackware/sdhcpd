@@ -62,8 +62,7 @@ class LDAPBackend(AbstractBackend):
         offer_options = dict()
         for attr_name in attrs_to_get:
             dhcp_attr_name = self.ldap_to_dhcp_attribute_map[attr_name]
-            value = list()
-            map(value.extend, parse_ip_or_str(results[0].get(attr_name, [])))
+            value = results[0].get(attr_name, [])
             offer_options[dhcp_attr_name] = value
         return BackendEntry(offer_options)
 

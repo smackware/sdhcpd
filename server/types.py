@@ -1,4 +1,50 @@
+import shlex
+
 from IPy import IP as _IP
+
+
+OPTION_TYPE_IP = 0x01
+OPTION_TYPE_MULTIPLE_IP = 0x02
+OPTION_TYPE_MAC = 0x03
+OPTION_TYPE_STRING = 0x04
+
+
+dhcp_option_name_by_alias = {
+        'address': 'yiaddr',
+        'hostname': 'host_name',
+        }
+
+dhcp_option_type_by_name = {
+        'yiaddr': OPTION_TYPE_IP,
+        'giaddr': OPTION_TYPE_MULTIPLE_IP,
+        'host_name': OPTION_TYPE_STRING,
+        'time_server': OPTION_TYPE_MULTIPLE_IP,
+        'domain_name': OPTION_TYPE_STRING,
+        'tftp_server_name': OPTION_TYPE_STRING,
+        'bootfile_name': OPTION_TYPE_STRING,
+}
+
+
+def parse_packet_option(option_name, value):
+    option_name = dhcp_option_name_by_alias.get(option_name, option_name)
+    option_type = dhcp_option_type_by_name.get(option_name, OPTION_TYPE_STRING)
+    if option_type == OPTION_TYPE_IP:
+        value = IP(value).list()
+    elif option_type == OPTION_TYPE_MULTIPLE_IP:
+        byte_list = list()
+        for ip_str in shlex.split(value):
+            byte_list.extend(IP(ip_str).list())
+        value = byte_list
+    elif option_type == OPTION_TYPE_MAC:
+        return MAC(value).list()
+    elif option_type == OPTION_TYPE_STRING:
+        byte_list = list()
+        for l in value:
+            byte_list.append(ord(l))
+        value = byte_list
+    else:
+        raise Exception("UNKNOWN OPTION TYPE")
+    return (option_name, value)
 
 def word_to_byte_list(i):
     ip_list = [0,0,0,0]

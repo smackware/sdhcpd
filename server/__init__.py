@@ -1,18 +1,31 @@
+import struct, socket, IN
+
 from pydhcplib.dhcp_packet import *
 from pydhcplib.dhcp_network import DhcpServer as _DhcpServer
-from server.types import IP, MAC, word
+from server.types import IP, MAC, word, parse_dhcp_option
 
 from helper.dhcp import parse_ip_or_str
 from server.ipv4 import IPLeaseManager, LeaseError
 
+DEFAULT_SERVER_PORT = 67
+DEFAULT_CLIENT_PORT = 68
+DEFAULT_LISTEN_ADDRESS = "0.0.0.0"
+
 class DhcpServer(_DhcpServer):
 
-    def __init__(self, dhcp_server_options, backends):
-        _DhcpServer.__init__(self,dhcp_server_options["listen_address"],
-                            dhcp_server_options["client_listen_port"],
-                            dhcp_server_options["server_listen_port"])
+    def __init__(self, listen_interface, backends):
+        _DhcpServer.__init__(
+                self, \
+                DEFAULT_LISTEN_ADDRESS, \
+                DEFAULT_CLIENT_PORT, \
+                DEFAULT_SERVER_PORT \
+                )
+        self.BindToDevice(listen_interface)
         self.backends = backends
         self.ip_lease_manager = IPLeaseManager("lease.db")
+
+    def BindToDevice(self, device) :
+        self.dhcp_socket.setsockopt(socket.SOL_SOCKET,IN.SO_BINDTODEVICE,struct.pack("5s", device))
 
     def _get_ipv4_network(self, offer_options=dict()):
         """Returns an IPy.IP"""
@@ -38,9 +51,8 @@ class DhcpServer(_DhcpServer):
 
     def _set_packet_options(self, packet, options):
         for k, v in options.iteritems():
-            if isinstance(v, str):
-                v = parse_ip_or_str(v)
-            packet.SetOption(k, v)
+            option_name, value = parse_dhcp_option(k, v)
+            packet.SetOption(option_name, value)
 
     def HandleDhcpDiscover(self, packet):
         print "GOT: DISCOVER"
@@ -81,6 +93,8 @@ class DhcpServer(_DhcpServer):
                 self.ip_lease_manager.delete_lease(mac)
                 print "Released lease of %s from %s" % (client_old_lease.ip, str(mac))
             return
+        entry_options = self._calculate_entry_options(packet)
+        self._set_packet_options(packet, entry_options)
         packet.SetOption('ip_address_lease_time', lease_time.bytes())
         packet.SetOption('yiaddr', ip.list())
         packet.TransformToDhcpAckPacket()
@@ -107,7 +121,6 @@ class DhcpServer(_DhcpServer):
         self._set_packet_options(packet, entry_options)
         client_lease = self.ip_lease_manager.get_lease(mac=mac)
         if not client_lease:
-            # Maybe send DHCP Deny?
             return None
         packet.SetOption('yiaddr', IP(client_lease.ip).list())
         packet.TransformToDhcpAckPacket()
