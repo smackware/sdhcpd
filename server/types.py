@@ -25,7 +25,7 @@ dhcp_option_type_by_name = {
 }
 
 
-def parse_packet_option(option_name, value):
+def parse_dhcp_option(option_name, value):
     option_name = dhcp_option_name_by_alias.get(option_name, option_name)
     option_type = dhcp_option_type_by_name.get(option_name, OPTION_TYPE_STRING)
     if option_type == OPTION_TYPE_IP:
