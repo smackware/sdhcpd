@@ -1,4 +1,5 @@
 import re
+import os
 import sys
 import time
 import optparse
@@ -8,7 +9,6 @@ from server import DhcpServer
 
 from subprocess import Popen, PIPE, STDOUT
 
-from helper.dhcp import parse_ip_or_str
 from backend import load_backends
 from server.ipv4 import IPLeaseManager, LeaseError
 
@@ -26,12 +26,19 @@ def parse_argv():
 
 if __name__ == '__main__':
     (options, args) = parse_argv()
-    print options
-    print args
-    sys.exit()
+    if not options.no_fork:
+        pid = os.fork()
+        if pid:
+            print "Started dhcpd, PID: %d" % (pid, )
+            sys.exit()
 
 backends = load_backends(BACKEND_CONFIG_DIRPATH)
+
 dhcp_server = DhcpServer("eth1", backends)
 
-while True :
-    dhcp_server.GetNextDhcpPacket()
+try:
+    while True:
+        dhcp_server.GetNextDhcpPacket()
+except (KeyboardInterrupt), e:
+    for backend in backends:
+        backend.close()
