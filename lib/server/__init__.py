@@ -1,6 +1,6 @@
 import logging
 
-import struct, socket, IN
+import struct, socket, select, IN
 
 from pydhcplib.dhcp_packet import *
 from pydhcplib.dhcp_network import DhcpServer as _DhcpServer
@@ -8,12 +8,14 @@ from server.types.parser import parse_dhcp_option, parse_ipv4_range_collection
 from server.types import IPv4, MAC, ByteObject
 
 from server.ipv4 import IPLeaseManager, LeaseError
+from pydhcplib.dhcp_packet import DhcpPacket
 
 DEFAULT_SERVER_PORT = 67
 DEFAULT_CLIENT_PORT = 68
 DEFAULT_LISTEN_ADDRESS = "0.0.0.0"
 
 class DhcpServer(_DhcpServer):
+    _socket = None
 
     def __init__(self, listen_interface, backends):
         _DhcpServer.__init__(
@@ -25,6 +27,55 @@ class DhcpServer(_DhcpServer):
         self.BindToDevice(listen_interface)
         self.backends = backends
         self.ip_lease_manager = IPLeaseManager("lease.db")
+        self._socket = self.dhcp_socket
+
+    def _create_socket(self):
+        _socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        _socket.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
+        _socket.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+        _socket.bind((DEFAULT_LISTEN_ADDRESS, DEFAULT_SERVER_PORT))
+        self._socket = _socket
+
+    def recieve_next_dhcp_packet(self, timeout=30):
+        print "Here"
+        while True:
+            data = select.select([self._socket], [], [], timeout)[0]
+
+            if not len(data):
+                return None
+
+            packet_data, source_address = self._socket.recvfrom(2048)
+            if packet_data:
+                packet = DhcpPacket()
+                packet.source_address = source_address
+                packet.DecodePacket(packet_data)
+                return packet
+        
+    def process_dhcp_packet(self, packet):
+        self.HandleDhcpAll(packet)
+        if packet.IsDhcpDiscoverPacket():
+            self.HandleDhcpDiscover(packet)
+        elif packet.IsDhcpRequestPacket():
+            self.HandleDhcpRequest(packet)
+        elif packet.IsDhcpDeclinePacket():
+            self.HandleDhcpDecline(packet)
+        elif packet.IsDhcpReleasePacket():
+            self.HandleDhcpRelease(packet)
+        elif packet.IsDhcpInformPacket():
+            self.HandleDhcpInform(packet)
+        elif packet.IsDhcpOfferPacket():
+            self.HandleDhcpOffer(packet)
+        elif packet.IsDhcpAckPacket():
+            self.HandleDhcpAck(packet)
+        elif packet.IsDhcpNackPacket():
+            self.HandleDhcpNack(packet)
+        else:
+            self.HandleDhcpUnknown(packet)
+
+    def process_next_dhcp_packet(self, timeout=30):
+        dhcp_packet = self.recieve_next_dhcp_packet(timeout)
+        self.process_dhcp_packet(dhcp_packet)
+        return dhcp_packet
 
     def BindToDevice(self, device) :
         self.dhcp_socket.setsockopt(socket.SOL_SOCKET,IN.SO_BINDTODEVICE,struct.pack("5s", device))
