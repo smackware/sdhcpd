@@ -2,6 +2,7 @@ import re
 import os
 import sys
 import time
+import logging
 import optparse
 
 from server import DhcpServer
@@ -34,11 +35,12 @@ if __name__ == '__main__':
 
 backends = load_backends(BACKEND_CONFIG_DIRPATH)
 
-dhcp_server = DhcpServer("eth1", backends)
+logging.basicConfig(level=logging.DEBUG)
+dhcp_server = DhcpServer("eth0", backends)
 
 try:
     while True:
-        dhcp_server.GetNextDhcpPacket()
+        dhcp_server.process_next_dhcp_packet()
 except (KeyboardInterrupt), e:
     for backend in backends:
         backend.close()
